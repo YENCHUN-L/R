@@ -192,3 +192,5 @@ F1Score <- function (recall, precision)
 }
 
 F1Score(recall,presicion)
+
+MSE(y_pred = data8$predict, y_true = data8$ccapply)
