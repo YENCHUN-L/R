@@ -38,6 +38,7 @@ length(unique(TBN_WM_TXN$CUST_NO))
 length(unique(TBN_CC_APPLY$CUST_NO))
 
 df <- distinct(TBN_CUST_BEHAVIOR,TBN_CUST_BEHAVIOR$CUST_NO, .keep_all= TRUE)
+
 df$VISITDATE <- df$PAGE <- df$`TBN_CUST_BEHAVIOR$CUST_NO` <- NULL
 
 TBN_CC_APPLYFRQ <- TBN_CC_APPLY %>%  group_by(CUST_NO) %>%  summarise(countcc = n())
@@ -164,3 +165,5 @@ data8$predict <- ifelse(data8$predict == "Y",1,0)
 F1_Score(data8$ccapply,data8$predict)
 
 confusionMatrix(table(data8$predict,data8$ccapply), positive = "1")
+
+MSE(y_pred = data8$predict, y_true = data8$ccapply)
