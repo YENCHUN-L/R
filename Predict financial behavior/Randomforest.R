@@ -178,3 +178,5 @@ F1_Score(data8$ccapply,data8$predict)
 
 
 confusionMatrix(table(data8$predict,data8$ccapply), positive = "1")
+
+MSE(y_pred = data8$predict, y_true = data8$ccapply)
