@@ -1,0 +1,262 @@
+---
+title: "Energy in EU"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+setwd("C:/Users/jason/Desktop/Retake/Forecasting") # Specify you own working directory here.
+library(readxl)
+library(knitr)
+library(fpp2)
+library(tseries)
+library(portes)
+```
+
+# Package used
+
+library(readxl)
+
+library(knitr)
+
+library(fpp2)
+
+library(tseries)
+
+library(portes)
+
+
+### Read in the data
+```{r readdata, echo=TRUE}
+data <- read_excel("DataSets.xlsx", sheet="Energy")
+data$Windpower <-NULL
+```
+
+### Data informaiton
+
+The data set Energy shows the yearly gross inland consumption of renewable energies (wind power and renewables) in the European Union, in thousand tonnes of oil equivalent (TOE) from 1990 up to 2016. For this analysis, use the Renewables" time series.
+
+We will Split the data in a training set up to 2010 and a test set from 2011 up to 2016. Use the training set for estimation of the methods/models, and use the test set for assessing the forecast accuracy.
+
+```{r ht, echo=TRUE}
+head(data)
+tail(data)
+```
+
+
+### Change to time series format
+```{r change to time series, echo=TRUE}
+to <- ts(data[,2], frequency = 1, start=c(1990))
+```
+
+### Split train and test
+```{r split, echo=TRUE}
+train <- window(to, start= c(1990), end= c(2010))
+test <- window(to, start= c(2011),end= c(2016))
+h = length(test)
+```
+
+### Line plot
+From the plot we can see that there's a upward trend from 1990 to 2016. There's no intensive fluctuation patterns.
+
+```{r plot whole data, echo=TRUE}
+plot(to, main="Renewable Energy")
+```
+
+
+### Naive method
+With the plot under we can see that naive predictions does not have a upward trend.
+However to judge the model performance we have to compare with other models by RMSE, MAE, MAPE and MAsE.
+
+For white noise series, we expect each autocorrelation to be close to zero. Of course, they will not be exactly equal to zero as there is some random variation. For a white noise series, we expect 95% of the spikes in the ACF to lie within the blue dashed lines above. If one or more large spikes are outside these bounds, or if substantially more than 5% of spikes are outside these bounds, then the series is probably not white noise.
+If Ljung-Box test p-value is above 0.05 means accept as white noise.
+The residual diagnostics show that after the residuals of this method are not white noise.
+
+```{r Seasonal naive method, echo=TRUE}
+f1 <-naive(train, h = h)
+plot(to,main="Renewable energy index", ylab="",xlab="Month")
+lines(f1$mean,col=4)
+legend("topleft",lty=1,col=c(4),legend=c("Naive"))
+res <- residuals(f1)
+checkresiduals(f1)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,20,4), order=0)
+accuracy(f1)[,c(2,3,5,6)]
+```
+
+
+
+### Exponential smoothing method
+
+We will compare to other models to know how accuracy is performing.
+The residual diagnostics show that the residuals of this method are not white noise.
+
+```{r stl, echo=TRUE}
+f2 <- ses(train, initial = "simple", h=h)
+autoplot(f2)
+res <- residuals(f2)
+checkresiduals(f2)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,20,4), order=0)
+accuracy(f2)[,c(2,3,5,6)]
+```
+
+### ETS
+
+ETS (Error, Trend, Seasonal) method is an approach method for forecasting time series.
+Based on the properties of the data, we estimate several ETS models with a trend and a seasonal component. We consider additive and multiplicative errors, and trends with and without damping.
+The first letter denotes the error type ("A", "M" or "Z");
+the second letter denotes the trend type ("N","A","M" or "Z");
+the third letter denotes the season type ("N","A","M" or "Z").
+In all cases, "N"=none, "A"=additive, "M"=multiplicative and "Z"=automatically selected.
+
+Due to the fact that we do not see a continues pattern of fluctuation.
+We will try MAN and MMN with damped and non damped, to compare with auto ets which auto ets choose among best AIC, but not accuracy.
+
+ETS AAN model have the best accuracy of MAE and MASE among ETS model for this situation.
+
+ETS MAN have the best MAPE. ETS MMN have the best RMSE.
+
+The residual diagnostics also has an acceptable result.
+
+```{r ets, echo=TRUE}
+f8 <- forecast(ets(train, model = "ZZZ"), method="rwdrift", h=h)
+autoplot(f8)
+f9 <- forecast(ets(train, model = "MAN"), method="rwdrift", h=h)
+autoplot(f9)
+f10 <- forecast(ets(train, model = "MMN"), method="rwdrift", h=h)
+autoplot(f10)
+f11 <- forecast(ets(train, model = "MAN",damped=TRUE), method="rwdrift", h=h)
+autoplot(f11)
+f12 <- forecast(ets(train, model = "MMN",damped=TRUE), method="rwdrift", h=h)
+autoplot(f12)
+
+a_fc8 <- accuracy(f8)[,c(2,3,5,6)]
+a_fc9 <- accuracy(f9)[,c(2,3,5,6)]
+a_fc10 <- accuracy(f10)[,c(2,3,5,6)]
+a_fc11 <- accuracy(f11)[,c(2,3,5,6)]
+a_fc12 <- accuracy(f12)[,c(2,3,5,6)]
+acc <- rbind(a_fc8, a_fc9, a_fc10, a_fc11, a_fc12)
+rownames(acc) <- c("a_fc8", "a_fc9", "a_fc10", "a_fc11", "a_fc12")
+acc
+
+res <- residuals(f8)
+checkresiduals(f8)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,20,4), order=0)
+
+res <- residuals(f9)
+checkresiduals(f9)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,20,4), order=0)
+
+res <- residuals(f10)
+checkresiduals(f10)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,20,4), order=0)
+
+res <- residuals(f11)
+checkresiduals(f11)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,20,4), order=0)
+
+res <- residuals(f12)
+checkresiduals(f12)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,20,4), order=0)
+```
+
+### ARIMA
+
+The ACF shows that nonstationarity is mainly caused by trend, and to a lesser extent by the seasonality.
+The auto.arima procedure results in an ARIMA 020 model. The ACF shows that nonstationarity is mainly caused by trend, and not by the seasonality.
+This model shows satisfactory diagnostics.
+We will explore some variations starting from this model, and check model fit and forecast accuracy. The code allows us to gather the results of several models.
+
+Arima 0 2 0 have the best AIC, where Arima 0 2 16 have the best accuracy.
+
+Although the Arima auto does show an acceptable result of residual diagnostics, but it's accuracy are not better than Arima 0 2 16 and it also has residual diagnostics results that is acceptable.
+
+```{r arima, echo=TRUE}
+tsdisplay(train, main="Renewable Energy", ylab="Renewable Energy Index", xlab="Year")
+ndiffs(train)
+
+f13 <- forecast(auto.arima(train), h=h)
+autoplot(f13)
+accuracy(f13)[,c(2,3,5,6)]
+res <- residuals(f13)
+checkresiduals(f13)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,20,4), order=0)
+
+f14 <- forecast(Arima(train, order=c(0,2,4)), h=h)
+autoplot(f14)
+
+f15 <- forecast(Arima(train, order=c(0,2,8)), h=h)
+autoplot(f15)
+
+f16 <- forecast(Arima(train, order=c(0,2,16)), h=h)
+autoplot(f16)
+
+accuracy(f13)[,c(2,3,5,6)]
+accuracy(f14)[,c(2,3,5,6)]
+accuracy(f15)[,c(2,3,5,6)]
+accuracy(f16)[,c(2,3,5,6)]
+
+res <- residuals(f16)
+checkresiduals(f16)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,20,4), order=0)
+
+```
+
+### Conclusion
+
+The Arima model 0 2 16 have been out perform other than all other models on training set.
+But on the test we can see that ETS MAN d test have the best performance of RMSE, MAE, MAPE and MASE.
+The residual diagnostics results of ETS MAN d test is also acceptable.
+Therefore we will use ETS MAN d as final to do forecast to 2020.
+
+```{r ftable, echo=TRUE}
+af1 = accuracy(f1, test)
+af2 = accuracy(f2, test)
+af8 = accuracy(f8, test)
+af9 = accuracy(f9, test)
+af10 = accuracy(f10, test)
+af11 = accuracy(f11, test)
+af12 = accuracy(f12, test)
+af13 = accuracy(f13, test)
+af14 = accuracy(f14, test)
+af15 = accuracy(f15, test)
+af16 = accuracy(f16, test)
+
+a.table <- rbind(af1, af2, af8, af9, af10, af11, af12, af13, af14, af15, af16)
+row.names(a.table)<-c("S. Naive training", 'S. Naive test',
+                      'STL training', 'STL test',
+                      'ETS auto training', 'ETS auto test',
+                      'ETS MAN training', 'ETS MAN test',
+                      'ETS MMN training', 'ETS MMN test',
+                      'ETS MAN d training', 'ETS MAN d test',
+                      'ETS MMN d training', 'ETS MMN d test',
+                      'ARIMA Auto training', 'ARIMA Auto test',
+                      'ARIMA 024 training', 'ARIMA 024 test',
+                      'ARIMA 028 training', 'ARIMA 028 test',
+                      'ARIMA 0216 training', 'ARIMA 0216 test')
+a.table <- as.data.frame(a.table)
+print(kable(a.table, caption="Forecast accuracy",digits = 2 ))
+
+```
+
+### Final model
+
+```{r final,echo=TRUE}
+train <- window(to, start=c(1990))
+
+f <- forecast(ets(train, model = "MAN",damped=TRUE), method="rwdrift", h=4)
+autoplot(f)
+
+f$mean
+```
+

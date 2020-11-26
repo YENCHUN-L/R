@@ -1,0 +1,419 @@
+---
+title: "2382 Quanta Monthly Sales"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+setwd("C:/Users/jason/Desktop/Retake/Forecasting") # Specify you own working directory here.
+library(readxl)
+library(knitr)
+library(fpp2)
+library(tseries)
+library(portes)
+```
+
+# Package used
+
+library(readxl)
+
+library(knitr)
+
+library(fpp2)
+
+library(tseries)
+
+library(portes)
+
+
+### Read in the data
+```{r readdata, echo=TRUE}
+data <- read_excel("2382MonthlySales.xlsx", sheet="Sheet1")
+```
+
+### Data informaiton
+
+The data set is Sales of 2382 Quanta company. The duration is from Jan. 2015 to Jun. 2019 monthly data.In general due to year end will have to publish financial statement, when the revenue increases are likely to attract investors, therefore companies do push CRM department at that period, it is also likely to have seasonal effect. Therefore by predicting sales revenue could be one of the factor to predict direction of stock price.
+
+```{r ht, echo=TRUE}
+head(data)
+tail(data)
+```
+
+### Change to time series format
+```{r change to time series, echo=TRUE}
+to <- ts(data[,2], frequency = 12, start=c(2015))
+```
+
+### Split train and test
+```{r split, echo=TRUE}
+train <- window(to, start= c(2015,1), end= c(2018,12))
+test <- window(to, start= c(2019,1),end= c(2019,6))
+h = length(test)
+```
+
+### Line plot
+From the plot we can see that there¡¦s fluctuation from 2015 to 2017.There are four major fluctuation. Through the plot we are not able to see if there is seasonal effect or not.
+We will build seasonal plot and month plot after.
+```{r plot whole data, echo=TRUE}
+plot(to, main="Sales")
+```
+
+### Season and month plot
+From the seasonal and month plot we can see that Feb. is generally the lowest and from Feb. will have a upward fluctuation to Dec.
+```{r season plot, echo=TRUE}
+seasonplot(to, year.labels=TRUE, year.labels.left=TRUE,
+           main="Seasonal plot",
+           ylab="Road Fatalities in Belgium",col=rainbow(21), pch=19)
+```
+
+```{r month plot, echo=TRUE}
+monthplot(to, main="Month plot", ylab = "Road Fatalities in Belgium",
+          xlab="Month", type="l")
+```
+
+### Seasonal naive method
+With the plot under we can see that the fluctuation is clearly not enough to the fact.
+However to judge the model performance we have to compare with other models by RMSE, MAE, MAPE and MAsE.
+
+For white noise series, we expect each autocorrelation to be close to zero. Of course, they will not be exactly equal to zero as there is some random variation. For a white noise series, we expect 95% of the spikes in the ACF to lie within the blue dashed lines above. If one or more large spikes are outside these bounds, or if substantially more than 5% of spikes are outside these bounds, then the series is probably not white noise.
+If Ljung-Box test p-value is above 0.05 means accept as white noise.
+The residual diagnostics show that after and below lag 9 the residuals of this method are not white noise.
+
+```{r Seasonal naive method, echo=TRUE}
+f1 <-snaive(train, h = h)
+plot(to,main="Sales index", ylab="",xlab="Month")
+lines(f1$mean,col=4)
+legend("topleft",lty=1,col=c(4),legend=c("Seaonsal naive"))
+res <- residuals(f1)
+checkresiduals(f1)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,24,4), order=0)
+accuracy(f1)[,c(2,3,5,6)]
+```
+
+
+
+### STL decomposition
+
+The two main parameters to be chosen when using STL are the trend-cycle window (t.window) and the seasonal window (s.window). These control how rapidly the trend-cycle and seasonal components can change. Smaller values allow for more rapid changes. Both t.window and s.window should be odd numbers;
+The residual diagnostics show that the residuals of this method are not white noise.
+
+```{r stl, echo=TRUE}
+f2 <- forecast(stl(train[,1],t.window = 15, s.window=13), method="rwdrift",h=h)
+autoplot(stl(train[,1], s.window="periodic"))
+autoplot(f2)
+res <- residuals(f2)
+checkresiduals(f2)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,24,4), order=0)
+accuracy(f2)[,c(2,3,5,6)]
+```
+
+### Holt-Winters method
+
+There are two variations to this method that differ in the nature of the seasonal component. The additive method is preferred when the seasonal variations are roughly constant through the series, while the multiplicative method is preferred when the seasonal variations are changing proportional to the level of the series.
+
+WE will apply Holt-Winters method with both additive and multiplicative seasonality and with/without exponential and damped or not to forecast, to see which one have the best accuracy.
+
+The Holt-Winters multiplicative method have the best performance compare to others.
+Where it does not have an acceptable residual diagnostics.
+Therefore we have to go with Damped Holt-winters multiplicative method, which it have the second best of accuracy with residual diagnostics that is acceptable.
+
+```{r hw, echo=TRUE}
+
+f3 <- forecast(hw(train,seasonal="mult", h=h), method="rwdrift", h=h)
+autoplot(f3)
+f4 <- forecast(hw(train,seasonal="mult",exponential=TRUE, h=h), method="rwdrift", h=h)
+autoplot(f4)
+f5 <- forecast(hw(train,seasonal="mult",exponential=TRUE, damped=TRUE, h=h), method="rwdrift", h=h)
+autoplot(f5)
+f6 <- forecast(hw(train,seasonal="addi", h=h), method="rwdrift", h=h)
+autoplot(f6)
+f7 <- forecast(hw(train,seasonal="addi",damped=TRUE, h=h), method="rwdrift", h=h)
+autoplot(f7)
+
+a_fc3 <- accuracy(f3)[,c(2,3,5,6)]
+a_fc4 <- accuracy(f4)[,c(2,3,5,6)]
+a_fc5 <- accuracy(f5)[,c(2,3,5,6)]
+a_fc6 <- accuracy(f6)[,c(2,3,5,6)]
+a_fc7 <- accuracy(f7)[,c(2,3,5,6)]
+acc <- rbind(a_fc3, a_fc4, a_fc5, a_fc6, a_fc7)
+rownames(acc) <- c("a_fc3", "a_fc4", "a_fc5", "a_fc6", "a_fc7")
+acc
+
+res <- residuals(f3)
+checkresiduals(f3)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,24,4), order=0)
+
+res <- residuals(f4)
+checkresiduals(f4)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,24,4), order=0)
+
+res <- residuals(f5)
+checkresiduals(f5)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,24,4), order=0)
+
+res <- residuals(f6)
+checkresiduals(f6)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,24,4), order=0)
+
+res <- residuals(f7)
+checkresiduals(f7)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,24,4), order=0)
+
+```
+
+### ETS
+ETS (Error, Trend, Seasonal) method is an approach method for forecasting time series.
+Based on the properties of the data, we estimate several ETS models with a trend and a seasonal component. We consider additive and multiplicative errors, and trends with and without damping.
+The first letter denotes the error type ("A", "M" or "Z");
+the second letter denotes the trend type ("N","A","M" or "Z");
+the third letter denotes the season type ("N","A","M" or "Z").
+In all cases, "N"=none, "A"=additive, "M"=multiplicative and "Z"=automatically selected.
+
+Due to the fact that we do see a continues pattern of fluctuation.
+We will try MMM and MAM with damped and non damped, to compare with auto ets which auto ets choose among best AIC, but not accuracy.
+ETS MMM model have the best accuracy among ETS model for this situation.
+The residual diagnostics doesn't have an acceptable result.
+So we have to go with ETS MMM with damped.
+
+```{r ets, echo=TRUE}
+f8 <- forecast(ets(train, model = "ZZZ"), method="rwdrift", h=h)
+autoplot(f8)
+f9 <- forecast(ets(train, model = "MAM"), method="rwdrift", h=h)
+autoplot(f9)
+f10 <- forecast(ets(train, model = "MMM"), method="rwdrift", h=h)
+autoplot(f10)
+f11 <- forecast(ets(train, model = "MAM",damped=TRUE), method="rwdrift", h=h)
+autoplot(f11)
+f12 <- forecast(ets(train, model = "MMM",damped=TRUE), method="rwdrift", h=h)
+autoplot(f12)
+
+a_fc8 <- accuracy(f8)[,c(2,3,5,6)]
+a_fc9 <- accuracy(f9)[,c(2,3,5,6)]
+a_fc10 <- accuracy(f10)[,c(2,3,5,6)]
+a_fc11 <- accuracy(f11)[,c(2,3,5,6)]
+a_fc12 <- accuracy(f12)[,c(2,3,5,6)]
+acc <- rbind(a_fc8, a_fc9, a_fc10, a_fc11, a_fc12)
+rownames(acc) <- c("a_fc8", "a_fc9", "a_fc10", "a_fc11", "a_fc12")
+acc
+
+res <- residuals(f8)
+checkresiduals(f8)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,24,4), order=0)
+
+res <- residuals(f9)
+checkresiduals(f9)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,24,4), order=0)
+
+res <- residuals(f10)
+checkresiduals(f10)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,24,4), order=0)
+
+res <- residuals(f11)
+checkresiduals(f11)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,24,4), order=0)
+
+res <- residuals(f12)
+checkresiduals(f12)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,24,4), order=0)
+
+```
+
+### ARIMA
+
+The auto.arima procedure results in an ARIMA(1,0,0)(1,1,0) model.
+This model does not shows satisfactory diagnostics.
+We will now explore some variations starting from this model, and check model fit and forecast accuracy. The code allows us to gather the results of several models.
+
+The first difference applyed suggest to take zero difference, then the seasonal difference suggest zero
+differences.
+
+210 110 best AIC
+
+411 112 best MASE training and test set
+
+212 112 best RMSE on the training set and 412 012 on test set.
+
+We will compare all test accuracy in the tables below.
+
+```{r arima, echo=TRUE}
+tsdisplay(train, main="Sales", ylab="Sales", xlab="Year")
+ndiffs(train)
+nsdiffs(diff(train))
+f13 <- forecast(auto.arima(train), h=h)
+autoplot(f13)
+accuracy(f13)[,c(2,3,5,6)]
+res <- residuals(f13)
+checkresiduals(f13)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,24,4), order=0)
+
+
+getinfo <- function(x,h,...)
+{
+  train.end <- time(x)[length(x)-h]
+  test.start <- time(x)[length(x)-h+1]
+  train <- window(x,end=train.end)
+  test <- window(x,start=test.start)
+  fit <- Arima(train,...)
+  fc <- forecast(fit,h=h)
+  a <- accuracy(fc,test)
+  result <- matrix(NA, nrow=1, ncol=5)
+  result[1,1] <- fit$aicc
+  result[1,2] <- a[1,6]
+  result[1,3] <- a[2,6]
+  result[1,4] <- a[1,2]
+  result[1,5] <- a[2,2]
+  return(result)
+}
+mat <- matrix(NA,nrow=54, ncol=5)
+modelnames <- vector(mode="character", length=54)
+line <- 0
+for (i in 2:4){
+  for (j in 0:2){
+    for (k in 0:1){
+      for (l in 0:2){
+        line <- line+1
+        mat[line,] <- getinfo(train,h=h,order=c(i,1,j),seasonal=c(k,1,l))
+        modelnames[line] <- paste0("ARIMA(",i,",1,",j,")(",k,",1,",l,")[12]")
+       }
+     }
+  }
+}
+colnames(mat) <- c("AICc", "MASE_train", "MASE_test", "RMSE_train", "RMSE_test")
+rownames(mat) <- modelnames
+
+
+print("best AICc")
+mat[mat[,1]==min(mat[,1])]
+which(mat[,1]==min(mat[,1]))
+
+print("best MASE_train")
+mat[mat[,2]==min(mat[,2])]
+which(mat[,2]==min(mat[,2]))
+
+print("best MASE_test")
+mat[mat[,3]==min(mat[,3])]
+which(mat[,3]==min(mat[,3]))
+
+print("best RMSE_train")
+mat[mat[,4]==min(mat[,4])]
+which(mat[,4]==min(mat[,4]))
+
+print("best RMSE_test")
+mat[mat[,5]==min(mat[,5])]
+which(mat[,5]==min(mat[,5]))
+
+f14 <- forecast(Arima(train, order=c(2,1,0), seasonal=c(1,1,0)), h=h)
+autoplot(f14)
+
+f15 <- forecast(Arima(train, order=c(4,1,1), seasonal=c(1,1,2)), h=h)
+autoplot(f15)
+
+f16 <- forecast(Arima(train, order=c(2,1,2), seasonal=c(1,1,2)), h=h)
+autoplot(f16)
+
+f17 <- forecast(Arima(train, order=c(4,1,2), seasonal=c(0,1,2)), h=h)
+autoplot(f17)
+
+
+accuracy(f13)[,c(2,3,5,6)]
+accuracy(f14)[,c(2,3,5,6)]
+accuracy(f15)[,c(2,3,5,6)]
+accuracy(f16)[,c(2,3,5,6)]
+accuracy(f17)[,c(2,3,5,6)]
+
+res <- residuals(f14)
+checkresiduals(f14)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,24,4), order=0)
+
+res <- residuals(f15)
+checkresiduals(f15)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,24,4), order=0)
+
+res <- residuals(f16)
+checkresiduals(f16)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,24,4), order=0)
+
+res <- residuals(f17)
+checkresiduals(f17)
+res <- na.omit(res)
+LjungBox(res, lags=seq(1,24,4), order=0)
+```
+
+### Conclusion
+
+With the table we can see that Arima auto test have best performance overall of MAE, MAPE and MASE.
+The residual diagnostics results of Arima auto test is also acceptable.
+Therefore we will use Arima auto test model as final to do forecast to 2020.
+
+```{r ftable, echo=TRUE}
+af1 = accuracy(f1, test)
+af2 = accuracy(f2, test)
+af3 = accuracy(f3, test)
+af4 = accuracy(f4, test)
+af5 = accuracy(f5, test)
+af6 = accuracy(f6, test)
+af7 = accuracy(f7, test)
+af8 = accuracy(f8, test)
+af9 = accuracy(f9, test)
+af10 = accuracy(f10, test)
+af11 = accuracy(f11, test)
+af12 = accuracy(f12, test)
+af13 = accuracy(f13, test)
+af14 = accuracy(f14, test)
+af15 = accuracy(f15, test)
+af16 = accuracy(f16, test)
+af17 = accuracy(f17, test)
+
+a.table <- rbind(af1, af2, af3, af4, af5, af6, af7, af8, af9, af10, af11, af12, af13, af14, af15, af16, af17)
+row.names(a.table)<-c("S. Naive training", 'S. Naive test',
+                      'STL training', 'STL test',
+                      'HW multi train','HW multi test',
+                      'HW multi exponential train','HW multi exponential test',
+                      'HW damped exponential train','HW damped exponential test',
+                      "HW additive train", "HW additive test",
+                      'HW addi damped trend train','HW addi damped trend test',
+                      'ETS auto training', 'ETS auto test',
+                      'ETS MAM training', 'ETS MAM test',
+                      'ETS MMM training', 'ETS MMM test',
+                      'ETS MAM d training', 'ETS MAM d test',
+                      'ETS MMM d training', 'ETS MMM d test',
+                      'ARIMA Auto training', 'ARIMA Auto test',
+                      'ARIMA 210 110 training', 'ARIMA 210 110 test',
+                      'ARIMA 411 112 training', 'ARIMA 411 112 test',
+                      'ARIMA 212 112 training', 'ARIMA 212 112 test',
+                      'ARIMA 411 012 training', 'ARIMA 412 012 test')
+a.table <- as.data.frame(a.table)
+print(kable(a.table, caption="Forecast accuracy",digits = 2 ))
+
+```
+
+### Final model
+
+```{r final,echo=TRUE}
+train <- window(to, start=c(2015,1),end=c(2019,6))
+
+f <- forecast(auto.arima(train), h=6)
+autoplot(f)
+
+f$mean
+```
+
